@@ -16,7 +16,17 @@
 
   abs.fzf-lua = {
     package = pkgs.vimPlugins.fzf-lua;
-    lznOpts.cmd = "FzfLua";
+    lznOpts = {
+      cmd = "FzfLua";
+      keys = [
+        [
+          "<Leader>ff"
+          (lib.mkLuaInline "function() FzfLua.files() end")
+          { desc = "fzf files"; }
+        ]
+      ];
+    };
+
     setupOpts = [
       "telescope"
       "hide"

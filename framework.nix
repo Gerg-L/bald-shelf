@@ -43,6 +43,18 @@ in
                     ];
                     default = "";
                   };
+                  after = lib.mkOption {
+                    type = lib.types.str;
+                    default = "require('${config.name}').setup(${luaLib.toLuaObject config.setupOpts})";
+                  };
+                  keys = lib.mkOption {
+                    type = lib.types.listOf (
+                      lib.types.oneOf [
+                        (lib.types.listOf lib.types.anything)
+                        lib.types.str
+                      ]
+                    );
+                  };
                 };
               };
             };
@@ -54,17 +66,11 @@ in
                   "${getName config.package}",
                   cmd = ${lib.optionalString (config.lznOpts.cmd != "") "${luaLib.toLuaObject config.lznOpts.cmd}"},
                   after = function()
-                    require('${config.name}').setup(${luaLib.toLuaObject config.setupOpts})
+                    ${lib.optionalString (config.lznOpts.after != "")
+                      "${luaLib.toLuaObject (lib.mkLuaInline config.lznOpts.after)}"
+                    }
                   end,
-                  keys = {
-                    {
-                      "<leader>ff",
-                      function()
-                        FzfLua.files()
-                      end,
-                      desc = "fzf files",
-                    },
-                  }
+                  keys = ${luaLib.toLuaObject config.lznOpts.keys},
                 }
               '';
             };
