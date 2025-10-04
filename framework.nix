@@ -5,6 +5,7 @@
   ...
 }:
 let
+  config' = config;
   luaLib = import ./stolen.nix { inherit lib; };
   getName = x: lib.removePrefix "vimplugin-" (lib.getName x);
 in
@@ -32,6 +33,10 @@ in
               default = { };
               type = lib.types.anything;
             };
+            loadBefore = lib.mkOption {
+              default = [ ];
+              type = lib.types.listOf lib.types.str;
+            };
 
             lznOpts = lib.mkOption {
               type = lib.types.submodule {
@@ -44,15 +49,15 @@ in
                     default = "";
                   };
                   beforeAll = lib.mkOption {
-                    type = lib.types.str;
+                    type = lib.types.lines;
                     default = "";
                   };
                   before = lib.mkOption {
-                    type = lib.types.str;
+                    type = lib.types.lines;
                     default = "";
                   };
                   after = lib.mkOption {
-                    type = lib.types.str;
+                    type = lib.types.lines;
                     default = "require('${config.name}').setup(${luaLib.toLuaObject config.setupOpts})";
                   };
                   event = lib.mkOption {
@@ -83,6 +88,7 @@ in
                         lib.types.str
                       ]
                     );
+                    default = [ ];
                   };
                   colorscheme = lib.mkOption {
                     type = lib.types.oneOf [
@@ -113,51 +119,54 @@ in
                 let
                   cfg = config.lznOpts;
                 in
-
                 ''
                   return {
-                    "${getName config.package}",
-                    ${lib.optionalString (cfg.enabled != "") ''
-                      enabled = 
-                         ${
-                           if builtins.isBool cfg.enabled then
-                             luaLib.toLuaObject cfg.enabled
-                           else
-                             ''
-                               function()
-                               ${luaLib.toLuaObject (lib.mkLuaInline cfg.enabled)}
-                                  end
-                             ''
-                         },
-                    ''}
-                    ${lib.optionalString (cfg.beforeAll != "") ''
-                      beforeAll = function()
-                          ${luaLib.toLuaObject (lib.mkLuaInline cfg.beforeAll)}
-                      end,
-                    ''}
-                    ${lib.optionalString (cfg.before != "") ''
-                      before = function()
-                          ${luaLib.toLuaObject (lib.mkLuaInline cfg.before)}
-                      end,
-                    ''}
-                    ${lib.optionalString (cfg.after != "") ''
-                      after = function()
-                          ${luaLib.toLuaObject (lib.mkLuaInline cfg.after)}
-                      end,
-                    ''}
-                    ${lib.optionalString (cfg.event != [ ]) "event = ${luaLib.toLuaObject cfg.event},"}
-                    ${lib.optionalString (cfg.cmd != [ ]) "cmd = ${luaLib.toLuaObject cfg.cmd},"}
-                    ${lib.optionalString (cfg.ft != [ ]) "ft = ${luaLib.toLuaObject cfg.ft},"}
-                    ${lib.optionalString (cfg.keys != [ ]) "keys = ${luaLib.toLuaObject cfg.keys},"}
-                    ${lib.optionalString (
-                      cfg.colorscheme != [ ]
-                    ) "colorscheme = ${luaLib.toLuaObject cfg.colorscheme},"}
-                    lazy = ${luaLib.toLuaObject cfg.lazy},
-                    priority = ${luaLib.toLuaObject cfg.priority},
-                    ${lib.optionalString (cfg.load != "") "load = ${luaLib.toLuaObject (lib.mkLuaInline cfg.lazy)},"}
+                    ${lib.concatStringsSep ",\n  " (
+                      builtins.filter (x: x != "") [
+                        "\"${getName config.package}\""
+                        (lib.optionalString (cfg.enabled != "")
+                          ''enabled = ${
+                            if builtins.isBool cfg.enabled then
+                              luaLib.toLuaObject cfg.enabled
+                            else
+                              ''
+                                function()
+                                ${luaLib.toLuaObject (lib.mkLuaInline cfg.enabled)}
+                                   end''
+                          }''
+                        )
+                        (lib.optionalString (cfg.beforeAll != "") ''
+                          beforeAll = function()
+                              ${luaLib.toLuaObject (lib.mkLuaInline cfg.beforeAll)}
+                            end'')
+                        (lib.optionalString (cfg.before != "") ''
+                          before = function()
+                              ${luaLib.toLuaObject (lib.mkLuaInline cfg.before)}
+                            end'')
+                        (lib.optionalString (cfg.after != "") ''
+                          after = function()
+                              ${luaLib.toLuaObject (lib.mkLuaInline cfg.after)}
+                            end'')
+                        (lib.optionalString (cfg.event != [ ]) "event = ${luaLib.toLuaObject cfg.event}")
+                        (lib.optionalString (cfg.cmd != [ ]) "cmd = ${luaLib.toLuaObject cfg.cmd}")
+                        (lib.optionalString (cfg.ft != [ ]) "ft = ${luaLib.toLuaObject cfg.ft}")
+                        (lib.optionalString (cfg.keys != [ ]) "keys = ${luaLib.toLuaObject cfg.keys}")
+                        (lib.optionalString (cfg.colorscheme != [ ]) "colorscheme = ${luaLib.toLuaObject cfg.colorscheme}")
+                        "lazy = ${luaLib.toLuaObject cfg.lazy}"
+                        "priority = ${luaLib.toLuaObject cfg.priority}"
+                        (lib.optionalString (cfg.load != "") "load = ${luaLib.toLuaObject (lib.mkLuaInline cfg.lazy)}")
+                      ]
+                    )}
                   }
                 '';
             };
+          };
+          config = {
+            lznOpts.before = lib.mkIf (config.loadBefore != [ ]) (
+              lib.concatLines (
+                map (x: "LZN.trigger_load(\"${getName config'.abs.${x}.package}\") ") config.loadBefore
+              )
+            );
           };
         }
       )
@@ -170,18 +179,31 @@ in
     in
     {
       initLua = ''
-        require("lz.n").load("mog")
+        LZN = require("lz.n")
+        LZN.load("mog")
       '';
 
       plugins = {
         start = [
           pkgs.vimPlugins.lz-n
-
-          (pkgs.symlinkJoin {
+          (pkgs.stdenvNoCC.mkDerivation {
             name = "mog";
-            paths = lib.mapAttrsToList (
-              name: value: (pkgs.writeTextDir "lua/mog/${name}.lua" value.textOutput)
-            ) enabledPlugins;
+            dontUnpack = true;
+            strictDeps = true;
+            dontFixup = true;
+            nativeBuildInputs = [ pkgs.stylua ];
+            buildCommand = ''
+              mkdir -p "$out/lua/mog"
+            ''
+            + (lib.concatLines (
+              lib.mapAttrsToList (
+                name: value: "cat ${pkgs.writeText "${name}.lua" value.textOutput} > \"$out/lua/mog/${name}.lua\""
+              ) enabledPlugins
+            ))
+            + ''
+              stylua --indent-type Spaces --indent-width 2 "$out/lua/mog/"*
+            '';
+
           })
         ];
 

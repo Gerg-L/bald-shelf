@@ -14,22 +14,29 @@
 
   desktopEntry = false;
 
-  abs.fzf-lua = {
-    package = pkgs.vimPlugins.fzf-lua;
-    lznOpts = {
-      cmd = "FzfLua";
-      keys = [
-        [
-          "<Leader>ff"
-          (lib.mkLuaInline "function() FzfLua.files() end")
-          { desc = "fzf files"; }
-        ]
+  abs = {
+    oil = {
+      lznOpts.after = "-- do nothing";
+      package = pkgs.vimPlugins.oil-nvim;
+    };
+    fzf-lua = {
+      loadBefore = [ "oil" ];
+      package = pkgs.vimPlugins.fzf-lua;
+      lznOpts = {
+        cmd = "FzfLua";
+        keys = [
+          [
+            "<Leader>ff"
+            (lib.mkLuaInline "function() FzfLua.files() end")
+            { desc = "fzf files"; }
+          ]
+        ];
+      };
+
+      setupOpts = [
+        "telescope"
+        "hide"
       ];
     };
-
-    setupOpts = [
-      "telescope"
-      "hide"
-    ];
   };
 }
