@@ -6,7 +6,7 @@
 }:
 let
   config' = config;
-  luaLib = import ./stolen.nix { inherit lib; };
+  toLuaObject = import ./toLuaObject.nix lib;
   getName = x: lib.removePrefix "vimplugin-" (lib.getName x);
 in
 {
@@ -58,7 +58,7 @@ in
                   };
                   after = lib.mkOption {
                     type = lib.types.lines;
-                    default = "require('${config.name}').setup(${luaLib.toLuaObject config.setupOpts})";
+                    default = "require('${config.name}').setup(${toLuaObject config.setupOpts})";
                   };
                   event = lib.mkOption {
                     type = lib.types.oneOf [
@@ -118,6 +118,21 @@ in
               default =
                 let
                   cfg = config.lznOpts;
+                  func =
+                    name:
+                    let
+                      val = builtins.getAttr name cfg;
+                    in
+                    lib.optionalString (val != "") ''
+                      ${name} = function()
+                          ${toLuaObject (lib.mkLuaInline val)}
+                        end'';
+                  obj =
+                    name:
+                    let
+                      val = builtins.getAttr name cfg;
+                    in
+                    lib.optionalString (val != [ ]) "${name} = ${toLuaObject val}";
                 in
                 ''
                   return {
@@ -127,34 +142,25 @@ in
                         (lib.optionalString (cfg.enabled != "")
                           ''enabled = ${
                             if builtins.isBool cfg.enabled then
-                              luaLib.toLuaObject cfg.enabled
+                              toLuaObject cfg.enabled
                             else
                               ''
                                 function()
-                                ${luaLib.toLuaObject (lib.mkLuaInline cfg.enabled)}
+                                ${toLuaObject (lib.mkLuaInline cfg.enabled)}
                                    end''
                           }''
                         )
-                        (lib.optionalString (cfg.beforeAll != "") ''
-                          beforeAll = function()
-                              ${luaLib.toLuaObject (lib.mkLuaInline cfg.beforeAll)}
-                            end'')
-                        (lib.optionalString (cfg.before != "") ''
-                          before = function()
-                              ${luaLib.toLuaObject (lib.mkLuaInline cfg.before)}
-                            end'')
-                        (lib.optionalString (cfg.after != "") ''
-                          after = function()
-                              ${luaLib.toLuaObject (lib.mkLuaInline cfg.after)}
-                            end'')
-                        (lib.optionalString (cfg.event != [ ]) "event = ${luaLib.toLuaObject cfg.event}")
-                        (lib.optionalString (cfg.cmd != [ ]) "cmd = ${luaLib.toLuaObject cfg.cmd}")
-                        (lib.optionalString (cfg.ft != [ ]) "ft = ${luaLib.toLuaObject cfg.ft}")
-                        (lib.optionalString (cfg.keys != [ ]) "keys = ${luaLib.toLuaObject cfg.keys}")
-                        (lib.optionalString (cfg.colorscheme != [ ]) "colorscheme = ${luaLib.toLuaObject cfg.colorscheme}")
-                        "lazy = ${luaLib.toLuaObject cfg.lazy}"
-                        "priority = ${luaLib.toLuaObject cfg.priority}"
-                        (lib.optionalString (cfg.load != "") "load = ${luaLib.toLuaObject (lib.mkLuaInline cfg.lazy)}")
+                        (func "beforeAll")
+                        (func "before")
+                        (func "after")
+                        (obj "event")
+                        (obj "cmd")
+                        (obj "ft")
+                        (obj "keys")
+                        (obj "colorscheme")
+                        "lazy = ${toLuaObject cfg.lazy}"
+                        "priority = ${toLuaObject cfg.priority}"
+                        (lib.optionalString (cfg.load != "") "load = ${toLuaObject (lib.mkLuaInline cfg.lazy)}")
                       ]
                     )}
                   }
@@ -201,7 +207,7 @@ in
               ) enabledPlugins
             ))
             + ''
-              stylua --indent-type Spaces --indent-width 2 "$out/lua/mog/"*
+              stylua --indent-type Spaces --indent-width 2 -g "*.lua" "$out/lua/mog" || true
             '';
 
           })
