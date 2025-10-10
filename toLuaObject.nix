@@ -6,8 +6,9 @@ let
       int = toString args;
       float = toString args;
 
-      string = ''"${args}"'';
-      path = ''"${args}"'';
+      # quotes and escapes backslashes
+      string = builtins.toJSON args;
+      path = builtins.toJSON args;
 
       bool = lib.boolToString args;
       null = "nil";
