@@ -106,7 +106,7 @@ in
                     default = 50;
                   };
                   load = lib.mkOption {
-                    type = lib.types.str;
+                    type = lib.types.lines;
                     default = "";
                   };
                 };
@@ -115,56 +115,11 @@ in
 
             textOutput = lib.mkOption {
               type = lib.types.lines;
-              default =
-                let
-                  cfg = config.lznOpts;
-                  func =
-                    name:
-                    let
-                      val = builtins.getAttr name cfg;
-                    in
-                    lib.optionalString (val != "") ''
-                      ${name} = function()
-                          ${toLuaObject (lib.mkLuaInline val)}
-                        end'';
-                  obj =
-                    name:
-                    let
-                      val = builtins.getAttr name cfg;
-                    in
-                    lib.optionalString (val != [ ]) "${name} = ${toLuaObject val}";
-                in
-                ''
-                  return {
-                    ${lib.concatStringsSep ",\n  " (
-                      builtins.filter (x: x != "") [
-                        "\"${getName config.package}\""
-                        (lib.optionalString (cfg.enabled != "")
-                          ''enabled = ${
-                            if builtins.isBool cfg.enabled then
-                              toLuaObject cfg.enabled
-                            else
-                              ''
-                                function()
-                                ${toLuaObject (lib.mkLuaInline cfg.enabled)}
-                                   end''
-                          }''
-                        )
-                        (func "beforeAll")
-                        (func "before")
-                        (func "after")
-                        (obj "event")
-                        (obj "cmd")
-                        (obj "ft")
-                        (obj "keys")
-                        (obj "colorscheme")
-                        "lazy = ${toLuaObject cfg.lazy}"
-                        "priority = ${toLuaObject cfg.priority}"
-                        (lib.optionalString (cfg.load != "") "load = ${toLuaObject (lib.mkLuaInline cfg.lazy)}")
-                      ]
-                    )}
-                  }
-                '';
+              readOnly = true;
+            };
+            objOutput = lib.mkOption {
+              type = lib.types.attrsOf lib.types.anything;
+              readOnly = true;
             };
           };
           config = {
@@ -173,6 +128,48 @@ in
                 map (x: "LZN.trigger_load(\"${getName config'.abs.${x}.package}\") ") config.loadBefore
               )
             );
+
+            objOutput =
+              let
+                cfg = config.lznOpts;
+                mkFunc =
+                  string:
+                  lib.mkLuaInline ''
+                    function()
+                      ${string}
+                    end'';
+              in
+              {
+                "@1" = getName config.package;
+                enabled = lib.mkIf (cfg.enabled != "") (
+                  if builtins.isBool cfg.enabled then cfg.enabled else mkFunc cfg.enabled
+                );
+                load = lib.mkIf (cfg.load != "") (
+                  lib.mkLuaInline ''
+                    function(name)
+                      ${cfg.load}
+                    end''
+                );
+                inherit (cfg)
+                  lazy
+                  priority
+                  ;
+              }
+              // (lib.genAttrs [
+                "event"
+                "cmd"
+                "ft"
+                "keys"
+                "colorscheme"
+              ] (name: lib.mkIf (cfg.${name} != [ ]) cfg.${name}))
+              // (lib.genAttrs [
+                "beforeAll"
+                "before"
+                "after"
+              ] (name: lib.mkIf (cfg.${name} != "") (mkFunc cfg.${name})));
+
+            textOutput = "return " + toLuaObject config.objOutput;
+
           };
         }
       )
@@ -200,13 +197,11 @@ in
             nativeBuildInputs = [ pkgs.stylua ];
             buildCommand = ''
               mkdir -p "$out/lua/mog"
-            ''
-            + (lib.concatLines (
-              lib.mapAttrsToList (
-                name: value: "cat ${pkgs.writeText "${name}.lua" value.textOutput} > \"$out/lua/mog/${name}.lua\""
-              ) enabledPlugins
-            ))
-            + ''
+              ${lib.pipe enabledPlugins [
+                builtins.attrValues
+                (map (x: ''cat ${pkgs.writeText "${x.name}.lua" x.textOutput} > "$out/lua/mog/${x.name}.lua"''))
+                lib.concatLines
+              ]}
               stylua --indent-type Spaces --indent-width 2 -g "*.lua" "$out/lua/mog" || true
             '';
 
