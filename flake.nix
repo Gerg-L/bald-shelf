@@ -29,6 +29,9 @@
       eachSystem = nixpkgs.lib.genAttrs (import systems);
     in
     {
+      mnwModules = {
+        lz-n = ./framework.nix;
+      };
       packages = eachSystem (
         system:
         let
