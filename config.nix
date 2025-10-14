@@ -14,7 +14,7 @@
 
   desktopEntry = false;
 
-  abs = {
+  lz-n = {
     #    oil = {
     #      lznOpts.after = "-- do nothing";
     #      package = pkgs.vimPlugins.oil-nvim;

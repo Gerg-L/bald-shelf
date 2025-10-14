@@ -10,7 +10,7 @@ let
   getName = x: lib.removePrefix "vimplugin-" (lib.getName x);
 in
 {
-  options.abs = lib.mkOption {
+  options.lz-n = lib.mkOption {
     type = lib.types.attrsOf (
       lib.types.submodule (
         { name, config, ... }:
@@ -125,7 +125,7 @@ in
           config = {
             lznOpts.before = lib.mkIf (config.loadBefore != [ ]) (
               lib.concatLines (
-                map (x: "LZN.trigger_load(\"${getName config'.abs.${x}.package}\") ") config.loadBefore
+                map (x: "LZN.trigger_load(\"${getName config'.lz-n.${x}.package}\") ") config.loadBefore
               )
             );
 
@@ -178,7 +178,7 @@ in
 
   config =
     let
-      enabledPlugins = lib.filterAttrs (_: value: value.enable) config.abs;
+      enabledPlugins = lib.filterAttrs (_: value: value.enable) config.lz-n;
     in
     {
       initLua = ''
