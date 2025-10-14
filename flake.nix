@@ -30,7 +30,7 @@
     in
     {
       mnwModules = {
-        lz-n = ./framework.nix;
+        lz-n = ./lz-n.nix;
       };
       packages = eachSystem (
         system:
@@ -40,7 +40,7 @@
         {
           default = mnw.lib.wrap { inherit pkgs inputs; } {
             imports = [
-              ./framework.nix
+              ./lz-n.nix
               ./config.nix
             ];
           };
