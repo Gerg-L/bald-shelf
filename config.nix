@@ -14,6 +14,12 @@
 
   desktopEntry = false;
 
+  decPlugin = {
+    "plugin/gerg.lua".text = ''
+      print('it worky')
+    '';
+  };
+
   lz-n.specs = {
     #    oil = {
     #      lznOpts.after = "-- do nothing";

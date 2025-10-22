@@ -42,6 +42,7 @@
             imports = [
               ./lz-n.nix
               ./config.nix
+              ./declarative-plugin.nix
             ];
           };
         }
