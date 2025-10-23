@@ -15,9 +15,16 @@
   desktopEntry = false;
 
   decPlugin = {
-    "plugin/gerg.lua".text = ''
-      print('it worky')
-    '';
+    plugin = {
+      "null" = null;
+      "gerg.lua" = ''
+        print('it worky')
+      '';
+      "not-gerg.lua" = pkgs.writeText "not-gerg.lua" ''
+        print('it worky derivation')
+      '';
+
+    };
   };
 
   lz-n.specs = {
